@@ -1,0 +1,588 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Informe de pagos — Obras sociales</title>
+<style>
+  :root{
+    --bg:#f6f7f9; --card:#fff; --border:#e2e5ea; --text:#1c2430; --muted:#66707d;
+    --accent:#2563eb; --accent-soft:#e8f0fe; --ok:#15803d; --warn:#b45309; --danger:#b91c1c;
+    --danger-soft:#fdecec; --shadow:0 1px 3px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.04);
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --bg:#11151b; --card:#1a2029; --border:#2b333f; --text:#e6e9ee; --muted:#94a0af;
+      --accent:#5b9bff; --accent-soft:#1e2b45; --ok:#4ade80; --warn:#fbbf24; --danger:#f87171;
+      --danger-soft:#3a1f22; --shadow:none;
+    }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+  .wrap{max-width:1180px;margin:0 auto;padding:24px 20px 80px}
+  h1{font-size:22px;margin:0 0 4px}
+  h2{font-size:15px;margin:0 0 14px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:18px;box-shadow:var(--shadow)}
+  .row{display:flex;flex-wrap:wrap;gap:14px}
+  .field{display:flex;flex-direction:column;gap:4px;flex:1;min-width:180px}
+  label{font-size:12px;color:var(--muted);font-weight:600}
+  input,select,button{font:inherit;color:inherit}
+  input,select{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px}
+  button{background:var(--accent);color:#fff;border:0;border-radius:8px;padding:9px 16px;font-weight:600;cursor:pointer}
+  button.ghost{background:transparent;color:var(--accent);border:1px solid var(--border)}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  .hint{font-size:12px;color:var(--muted)}
+  .hidden{display:none}
+  #status{margin:8px 0;font-size:13px;min-height:18px}
+  #status.err{color:var(--danger)} #status.ok{color:var(--ok)}
+  details summary{cursor:pointer;font-weight:600;font-size:13px;color:var(--accent)}
+  details ol{margin:8px 0 0;padding-left:20px;font-size:13px;color:var(--muted)}
+  code{background:var(--accent-soft);padding:1px 5px;border-radius:4px;font-size:12px}
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}
+  .stat{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px}
+  .stat .n{font-size:22px;font-weight:700}
+  .stat .l{font-size:12px;color:var(--muted)}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--border);white-space:nowrap}
+  th{cursor:pointer;user-select:none;font-size:12px;color:var(--muted);position:sticky;top:0;background:var(--card)}
+  th.sorted::after{content:" ▾"} th.sorted.asc::after{content:" ▴"}
+  tfoot td{position:sticky;bottom:0;background:var(--card);border-top:2px solid var(--border);font-weight:700}
+  td.num,th.num{text-align:right}
+  .tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;font-weight:600}
+  .tag.pend{background:#fef3c7;color:#92400e}
+  .tag.cobrar{background:var(--danger-soft);color:var(--danger)}
+  .tag.pag{background:var(--accent-soft);color:var(--ok)}
+  @media (prefers-color-scheme:dark){.tag.pend{background:#3a2f14;color:#fbbf24}}
+  .scroll{overflow:auto;max-height:70vh;border:1px solid var(--border);border-radius:10px}
+  .bar-row{display:grid;grid-template-columns:260px 1fr 120px 60px;gap:10px;align-items:center;padding:5px 0;font-size:13px}
+  .bar{height:14px;background:var(--accent);border-radius:4px;min-width:2px}
+  .bar.venc{background:var(--danger)}
+  .checks{display:flex;flex-wrap:wrap;gap:6px 14px;max-height:120px;overflow:auto}
+  .checks label{display:flex;align-items:center;gap:5px;font-weight:400;color:var(--text);font-size:13px}
+  .toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end}
+  .tabs{display:flex;gap:4px;border-bottom:1px solid var(--border);margin:16px 0 20px}
+  .tabs button{background:transparent;color:var(--muted);border:0;border-bottom:2px solid transparent;border-radius:0;padding:9px 16px;font-weight:600}
+  .tabs button.active{color:var(--accent);border-bottom-color:var(--accent)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Informe de pagos — Obras sociales</h1>
+  <div class="hint">Todo corre en tu navegador. Los datos viajan solo entre tu equipo y Google; nada se guarda en ningún servidor.</div>
+  <div id="status"></div>
+
+  <nav class="tabs">
+    <button data-tab="informe" class="active">Informe</button>
+    <button data-tab="config">Configuración</button>
+  </nav>
+
+  <div id="tabInforme">
+  <!-- SUMMARY -->
+  <section class="hidden" id="sumCard">
+    <div class="card">
+      <h2>Resumen de lo pendiente</h2>
+      <div class="stats" id="stats"></div>
+    </div>
+    <div class="card">
+      <h2>Cobros esperados por mes (pendientes)</h2>
+      <div id="byMonth"></div>
+    </div>
+  </section>
+
+  <!-- CONTROLS + TABLE -->
+  <section class="card hidden" id="tblCard">
+    <h2>Detalle</h2>
+    <div class="toolbar">
+      <div class="field" style="max-width:170px">
+        <label>Estado</label>
+        <select id="fEstado">
+          <option value="unpaid">Impagos (todos)</option>
+          <option value="pendiente">Pendiente</option>
+          <option value="cobrar">Por cobrar</option>
+          <option value="pagada">Pagadas</option>
+          <option value="all">Todas</option>
+        </select>
+      </div>
+      <div class="field" style="max-width:180px">
+        <label>Buscar paciente</label>
+        <input id="fBuscar" placeholder="nombre...">
+      </div>
+      <div class="field" style="max-width:150px">
+        <label>Mes esperado desde</label>
+        <input id="fDesde" type="month">
+      </div>
+      <div class="field" style="max-width:150px">
+        <label>hasta</label>
+        <input id="fHasta" type="month">
+      </div>
+      <button id="btnCsv" class="ghost">Exportar CSV</button>
+      <button id="btnReload2" class="ghost">Actualizar datos</button>
+    </div>
+    <div class="field" style="margin:12px 0 4px">
+      <label>Pacientes · <a href="#" id="pacAll">todos</a> · <a href="#" id="pacNone">ninguno</a></label>
+      <div class="checks" id="fPacientes"></div>
+    </div>
+    <div class="scroll"><table id="tbl"></table></div>
+    <div class="hint" id="tblCount" style="margin-top:8px"></div>
+  </section>
+  <p class="hint hidden" id="informeEmpty">Todavía no hay datos. Andá a <b>Configuración</b> para conectar la planilla.</p>
+  </div>
+
+  <div id="tabConfig" class="hidden">
+  <!-- CONFIG -->
+  <section class="card" id="cfgCard">
+    <h2>1 · Conexión</h2>
+    <div class="row">
+      <div class="field" style="flex:2">
+        <label>Google OAuth Client ID</label>
+        <input id="clientId" placeholder="xxxxx.apps.googleusercontent.com" autocomplete="off">
+      </div>
+      <div class="field" style="flex:3">
+        <label>URL o ID de la planilla</label>
+        <input id="sheetUrl" placeholder="https://docs.google.com/spreadsheets/d/...">
+      </div>
+      <div class="field" style="flex:1">
+        <label>GID de la hoja</label>
+        <input id="gid" placeholder="0">
+      </div>
+    </div>
+    <div class="row" style="margin-top:12px;align-items:center">
+      <button id="btnConnect" disabled>Conectar con Google</button>
+      <button id="btnReload" class="ghost hidden">Actualizar datos</button>
+      <span class="hint">Origen actual: <code id="origin"></code></span>
+    </div>
+    <div class="hint" style="margin-top:8px">La sesión (token de solo lectura, dura 1 h) queda guardada en este navegador para no reconectar en cada refresco. Se renueva sola mientras tu sesión de Google siga activa.</div>
+  </section>
+
+  <!-- MAPPING -->
+  <section class="card hidden" id="mapCard">
+    <h2>2 · Columnas y cálculo</h2>
+    <div class="row" id="mapRow"></div>
+    <div class="row" style="margin-top:12px">
+      <div class="field" style="max-width:260px">
+        <label>Meses a sumar al mes del bloque (estimar cobro)</label>
+        <input id="mesesAtraso" type="number" min="0" max="12" step="1">
+      </div>
+      <div class="field">
+        <label>Estado de pago</label>
+        <input value="Se toma del color de la celda: verde = pago · celeste = pendiente" readonly>
+      </div>
+    </div>
+    <div class="hint" id="mapInfo" style="margin-top:8px"></div>
+  </section>
+  </div>
+</div>
+
+<script src="https://accounts.google.com/gsi/client" async></script>
+<script>
+const SCOPE='https://www.googleapis.com/auth/spreadsheets.readonly';
+const LS='informe-pagos-v3';
+const MESES={enero:0,febrero:1,marzo:2,abril:3,mayo:4,junio:5,julio:6,agosto:7,
+  septiembre:8,setiembre:8,octubre:9,noviembre:10,diciembre:11};
+const $=id=>document.getElementById(id);
+const fmtMoney=n=>isNaN(n)?'—':new Intl.NumberFormat('es-AR',{style:'currency',currency:'ARS',maximumFractionDigits:0}).format(n);
+const fmtDate=d=>d?d.toLocaleDateString('es-AR'):'—';
+const monthKey=d=>d?`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`:'';
+const monthLabel=k=>{const[y,m]=k.split('-');return new Date(y,m-1,1).toLocaleDateString('es-AR',{month:'long',year:'numeric'})};
+const todayMonth=monthKey(new Date());
+
+let state=load();
+let gridRaw=[], gridBg=[], uniqueCols=[], monthGroups=[], patientRows=[], records=[], sort={col:'esperado',dir:1};
+
+function load(){
+  const d={clientId:'',spreadsheetId:'1vYYDA61Ec0un6CSCgUQXGPe_tnHQeAcUttwwzKHjXyA',gid:'1943900187',
+    mapping:{paciente:'',obraSocial:''},mesesAtraso:0,
+    filtros:{estado:'unpaid',buscar:'',desde:'',hasta:'',pacientes:null}};
+  try{return Object.assign(d,JSON.parse(localStorage.getItem(LS)||'{}'))}catch(e){return d}
+}
+function save(){localStorage.setItem(LS,JSON.stringify(state))}
+
+$('origin').textContent=location.origin;
+$('clientId').value=state.clientId;
+$('sheetUrl').value=state.spreadsheetId;
+$('gid').value=state.gid;
+$('mesesAtraso').value=state.mesesAtraso;
+if(state.filtros.estado==='pend')state.filtros.estado='unpaid';
+if(state.filtros.estado==='pag')state.filtros.estado='pagada';
+$('fEstado').value=state.filtros.estado;
+$('fBuscar').value=state.filtros.buscar;
+$('fDesde').value=state.filtros.desde;
+$('fHasta').value=state.filtros.hasta;
+
+$('clientId').oninput=e=>{state.clientId=e.target.value.trim();save()};
+$('sheetUrl').oninput=e=>{
+  const v=e.target.value.trim();
+  const m=v.match(/\/d\/([a-zA-Z0-9_-]+)/); state.spreadsheetId=m?m[1]:v;
+  const g=v.match(/[#&]gid=(\d+)/); if(g){state.gid=g[1];$('gid').value=g[1]}
+  save();
+};
+$('gid').oninput=e=>{state.gid=e.target.value.trim();save()};
+$('mesesAtraso').onchange=e=>{state.mesesAtraso=+e.target.value||0;save();rebuild()};
+['fEstado','fBuscar','fDesde','fHasta'].forEach(id=>{
+  $(id).oninput=()=>{Object.assign(state.filtros,{estado:$('fEstado').value,buscar:$('fBuscar').value,
+    desde:$('fDesde').value,hasta:$('fHasta').value});save();render()};
+});
+function showTab(t){
+  document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('active',b.dataset.tab===t));
+  $('tabInforme').classList.toggle('hidden',t!=='informe');
+  $('tabConfig').classList.toggle('hidden',t!=='config');
+  state.tab=t;save();
+}
+document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>showTab(b.dataset.tab));
+showTab(state.clientId?(state.tab||'informe'):'config');
+$('informeEmpty').classList.toggle('hidden',!!records.length);
+
+$('btnConnect').onclick=connect;
+const doReload=()=>getToken('silent').then(loadData).catch(()=>getToken('consent').then(loadData)).catch(showErr);
+$('btnReload').onclick=doReload;
+$('btnReload2').onclick=doReload;
+$('btnCsv').onclick=exportCsv;
+
+// ---------- auth (persistente) ----------
+const TK='informe-pagos-token';
+let tokenClient, token='', tokenExp=0, pending=null;
+try{const c=JSON.parse(localStorage.getItem(TK)||'null');if(c&&Date.now()<c.tokenExp){token=c.token;tokenExp=c.tokenExp}}catch(e){}
+
+function initClient(){
+  if(tokenClient)return;
+  tokenClient=google.accounts.oauth2.initTokenClient({
+    client_id:state.clientId, scope:SCOPE,
+    callback:r=>{
+      const p=pending; pending=null;
+      if(r.error){setStatus('Autorización: '+r.error,'err'); p&&p.rej(new Error(r.error)); return}
+      token=r.access_token; tokenExp=Date.now()+(((+r.expires_in||3600)-60)*1000);
+      try{localStorage.setItem(TK,JSON.stringify({token,tokenExp}))}catch(e){}
+      p?p.res(token):doReload();
+    }
+  });
+}
+function getToken(mode){ // 'silent' | 'consent'
+  return new Promise((res,rej)=>{
+    if(token&&Date.now()<tokenExp)return res(token);
+    if(!window.google?.accounts?.oauth2)return rej(new Error('Google todavía cargando, probá de nuevo.'));
+    if(!state.clientId)return rej(new Error('Falta el Client ID.'));
+    initClient();
+    pending={res,rej};
+    try{tokenClient.requestAccessToken({prompt: mode==='consent'?'consent':''})}
+    catch(e){pending=null;rej(e)}
+  });
+}
+function connect(){
+  if(!state.spreadsheetId)return showErr(new Error('Falta la planilla.'));
+  setStatus('Abriendo login de Google…');
+  getToken('consent').then(loadData).catch(showErr);
+}
+
+(function poll(){
+  if(!window.google?.accounts?.oauth2)return setTimeout(poll,200);
+  $('btnConnect').disabled=false;
+  if(state.clientId&&state.spreadsheetId){
+    getToken('silent').then(loadData).catch(()=>setStatus('Sesión de Google no activa — tocá «Conectar con Google».'));
+  }
+})();
+
+// ---------- data ----------
+async function api(url,retry){
+  const r=await fetch(url,{headers:{Authorization:'Bearer '+token}});
+  if(r.status===401){
+    token='';tokenExp=0;try{localStorage.removeItem(TK)}catch(e){}
+    if(!retry){await getToken('silent');return api(url,true)}
+    throw new Error('Sesión expirada. Tocá «Conectar con Google».');
+  }
+  if(!r.ok)throw new Error('API '+r.status+': '+(await r.text()).slice(0,200));
+  return r.json();
+}
+async function loadData(){
+  setStatus('Leyendo planilla (valores y colores)…');
+  const flds='sheets(properties(title,sheetId),data(rowData(values(formattedValue,effectiveFormat(backgroundColor,backgroundColorStyle)))))';
+  const meta=await api(`https://sheets.googleapis.com/v4/spreadsheets/${state.spreadsheetId}?includeGridData=true&fields=${encodeURIComponent(flds)}`);
+  const sh=meta.sheets.find(s=>String(s.properties.sheetId)===String(state.gid))||meta.sheets[0];
+  const title=sh.properties.title;
+  const rd=(sh.data&&sh.data[0]&&sh.data[0].rowData)||[];
+  gridRaw=rd.map(r=>(r.values||[]).map(c=>c.formattedValue??''));
+  gridBg=rd.map(r=>(r.values||[]).map(c=>classifyColor(c.effectiveFormat)));
+  if(gridRaw.length<3)throw new Error('La hoja no tiene datos (encabezados en filas 1-2, datos desde la 3).');
+  parseLayout();
+  buildMapping();
+  rebuild();
+  const cc={paid:0,pending:0,other:0};
+  gridBg.forEach((row,r)=>{if(r<2)return;row.forEach(v=>{if(cc[v]!=null)cc[v]++})});
+  setStatus(`Hoja «${title}» · ${patientRows.length} pacientes · ${monthGroups.length} meses · celdas verdes ${cc.paid} / celestes ${cc.pending}`,'ok');
+  $('btnReload').classList.remove('hidden');
+  ['mapCard','sumCard','tblCard'].forEach(i=>$(i).classList.remove('hidden'));
+  $('informeEmpty').classList.add('hidden');
+  showTab('informe');
+}
+
+// verde => 'paid', celeste/azul => 'pending', resto => 'none'
+function classifyColor(fmt){
+  let bg=fmt&&(fmt.backgroundColor||(fmt.backgroundColorStyle&&fmt.backgroundColorStyle.rgbColor));
+  if(!bg)return 'none';
+  const r=bg.red||0,g=bg.green||0,b=bg.blue||0;
+  const max=Math.max(r,g,b),min=Math.min(r,g,b);
+  if(max>.95&&min>.9)return 'none';        // blanco
+  if(max-min<.06)return 'none';            // gris
+  if(g>=r&&g>b+.03)return 'paid';          // verdoso
+  if(b>r+.03&&b>=g-.06)return 'pending';   // celeste / azulado
+  return 'other';
+}
+
+function parseMesBloque(s){
+  const m=String(s).trim().toLowerCase().match(/^([a-záéíóúñ]+)\.?\s+(20\d\d)$/);
+  if(!m||!(m[1] in MESES))return null;
+  return new Date(+m[2],MESES[m[1]],1);
+}
+function parseLayout(){
+  const raw=gridRaw;
+  const h1=raw[0]||[], h2=raw[1]||[];
+  const width=Math.max(h1.length,h2.length,...raw.slice(2).map(r=>r.length));
+  // detectar arranque de bloques de mes en la fila 1
+  const starts=[];
+  for(let c=0;c<width;c++) if(parseMesBloque(h1[c])) starts.push(c);
+  if(!starts.length)throw new Error('No encontré ningún encabezado de mes (ej. "enero 2026") en la fila 1.');
+  const firstMonth=starts[0];
+  uniqueCols=[];
+  for(let c=0;c<firstMonth;c++){
+    const name=[h1[c],h2[c]].map(x=>String(x||'').trim()).filter(Boolean).join(' ').replace(/\s+/g,' ').trim();
+    uniqueCols.push({idx:c,name:name||`Columna ${c+1}`});
+  }
+  monthGroups=starts.map((c,i)=>{
+    const end=(starts[i+1]??width);
+    const sub={};
+    for(let k=c;k<end;k++){
+      const t=String(h2[k]||'').toLowerCase();
+      if(/dep[oó]sito/.test(t))sub.deposito=k;
+      else if(/monto/.test(t))sub.monto=k;
+      else if(/rendici/.test(t))sub.rendicion=k;
+      else if(/fact/.test(t))sub.fact=k;
+    }
+    // fallback posicional FECHA DEPÓSITO, MONTO, RENDICIÓN, N FACT
+    if(sub.deposito==null)sub.deposito=c;
+    if(sub.monto==null)sub.monto=c+1;
+    if(sub.rendicion==null)sub.rendicion=c+2;
+    if(sub.fact==null)sub.fact=c+3;
+    return {mes:parseMesBloque(h1[c]),label:String(h1[c]).trim(),...sub};
+  });
+  patientRows=[];
+  for(let r=2;r<raw.length;r++) if((raw[r]||[]).some(c=>String(c).trim()!=='')) patientRows.push(r);
+}
+
+function guessUnique(res){
+  const hit=uniqueCols.find(u=>res.some(re=>re.test(u.name)));
+  return hit?hit.name:'';
+}
+function buildMapping(){
+  if(!uniqueCols.some(u=>u.name===state.mapping.paciente))
+    state.mapping.paciente=guessUnique([/paciente/i,/nombre/i,/apellido/i])||uniqueCols[0]?.name||'';
+  if(!uniqueCols.some(u=>u.name===state.mapping.obraSocial))
+    state.mapping.obraSocial=guessUnique([/obra\s*social/i,/cobertura/i,/financiador/i,/prepaga/i])||'';
+  save();
+  const mk=(role,label)=>`<div class="field"><label>${label}</label><select data-role="${role}">
+    <option value="">— sin asignar —</option>
+    ${uniqueCols.map(u=>`<option ${u.name===state.mapping[role]?'selected':''}>${u.name.replace(/</g,'&lt;')}</option>`).join('')}
+   </select></div>`;
+  $('mapRow').innerHTML=mk('paciente','Paciente')+mk('obraSocial','Obra social');
+  $('mapRow').querySelectorAll('select').forEach(s=>s.onchange=e=>{
+    state.mapping[e.target.dataset.role]=e.target.value;save();rebuild();
+  });
+  $('mapInfo').textContent='Columnas únicas detectadas (A–?): '+uniqueCols.map(u=>u.name).join(' · ');
+}
+
+// ---------- parsing valores ----------
+function parseMonto(v){
+  let s=String(v).trim().replace(/[^\d.,-]/g,'');
+  if(!s)return NaN;
+  const hasC=s.includes(','),hasD=s.includes('.');
+  if(hasC&&hasD){s=(s.lastIndexOf(',')>s.lastIndexOf('.'))?s.replace(/\./g,'').replace(',','.'):s.replace(/,/g,'')}
+  else if(hasC){const p=s.split(',');s=(p.length===2&&p[1].length<=2)?s.replace(',','.'):s.replace(/,/g,'')}
+  else if(hasD){const p=s.split('.');if(!(p.length===2&&p[1].length<=2))s=s.replace(/\./g,'')}
+  return parseFloat(s);
+}
+function parseFecha(v){
+  const s=String(v).trim();if(!s)return null;
+  let m;
+  if(m=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/))return new Date(+m[1],+m[2]-1,+m[3]);
+  if(m=s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/)){let y=+m[3];if(y<100)y+=2000;return new Date(y,+m[2]-1,+m[1])}
+  const d=new Date(s);return isNaN(d)?null:d;
+}
+function soloNombre(v){
+  let s=String(v??'').replace(/\r/g,'').trim();
+  s=s.split('\n')[0];                 // primera línea
+  s=s.split(/\bDNI\b/i)[0];           // corta en "DNI"
+  s=s.replace(/[\s\d.,/;:()\-]+$/,'');// saca números/afiliado al final
+  return s.trim();
+}
+function soloObra(v){
+  let s=String(v??'').replace(/\r/g,'').split('\n')[0];
+  s=s.split(/\b(?:cuit|iva|responsable|consumidor)\b/i)[0];      // corta en la primera palabra clave
+  s=s.replace(/[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ\s]+/g,' ').replace(/\s+/g,' ').trim(); // solo letras
+  return s;
+}
+function addMonths(d,n){const x=new Date(d.getTime()),day=x.getDate();x.setMonth(x.getMonth()+n);if(x.getDate()<day)x.setDate(0);return x}
+
+function rebuild(){
+  const iPac=uniqueCols.find(u=>u.name===state.mapping.paciente)?.idx;
+  const iOS=uniqueCols.find(u=>u.name===state.mapping.obraSocial)?.idx;
+  records=[];
+  patientRows.forEach(r=>{
+    const row=gridRaw[r]||[], brow=gridBg[r]||[];
+    const paciente=iPac!=null?soloNombre(row[iPac]):'';
+    const obraSocial=(iOS!=null?soloObra(row[iOS]):'')||'(sin obra social)';
+    if(!paciente)return;
+    monthGroups.forEach(g=>{
+      const depRaw=String(row[g.deposito]??'').trim();
+      const monto=parseMonto(row[g.monto]??'');
+      const rendicion=parseMonto(row[g.rendicion]??'');
+      const fact=String(row[g.fact]??'').trim();
+      // estado por color: mira MONTO y si no, el resto del bloque
+      let color='none';
+      for(const ci of [g.monto,g.deposito,g.rendicion,g.fact]){
+        const s=brow[ci]||'none';
+        if(s==='paid'||s==='pending'){color=s;break}
+      }
+      const hayDato=depRaw||!isNaN(monto)||!isNaN(rendicion)||fact;
+      if(color==='none'&&!hayDato)return;
+      const pagada=color==='paid';
+      const esperado=g.mes?addMonths(g.mes,state.mesesAtraso):null;
+      records.push({paciente,obraSocial,mesBloque:g.mes,mesLabel:g.label,color,
+        monto,rendicion,fact,fechaDeposito:parseFecha(depRaw),depRaw,pagada,esperado});
+    });
+  });
+  buildPacientes();
+  render();
+}
+
+function buildPacientes(){
+  const all=[...new Set(records.map(r=>r.paciente))].sort((a,b)=>a.localeCompare(b,'es'));
+  let sel=state.filtros.pacientes;
+  if(sel==null)sel=all.slice(); else sel=sel.filter(p=>all.includes(p));
+  state.filtros.pacientes=sel; save();
+  const setSel=arr=>{state.filtros.pacientes=arr;save();buildPacientes();render()};
+  $('fPacientes').innerHTML=all.map(p=>`<label><input type="checkbox" value="${p.replace(/"/g,'&quot;')}" ${sel.includes(p)?'checked':''}> ${p.replace(/</g,'&lt;')}</label>`).join('');
+  $('fPacientes').querySelectorAll('input').forEach(cb=>cb.onchange=()=>
+    setSel([...$('fPacientes').querySelectorAll('input:checked')].map(x=>x.value)));
+  $('pacAll').onclick=e=>{e.preventDefault();setSel(all.slice())};
+  $('pacNone').onclick=e=>{e.preventDefault();setSel([])};
+}
+
+function isPend(r){ return !r.pagada && (r.color==='pending' || !isNaN(r.monto)); }
+// 'pagada' | 'cobrar' (impago y ya pasó el mes esperado) | 'pendiente' (impago, dentro de plazo)
+function estadoDe(r){
+  if(r.pagada)return 'pagada';
+  const k=monthKey(r.esperado);
+  return (k&&k<=todayMonth)?'cobrar':'pendiente';
+}
+function filtered(){
+  const f=state.filtros;
+  return records.filter(r=>{
+    const e=f.estado, st=estadoDe(r);
+    if(e==='unpaid'&&st==='pagada')return false;
+    if((e==='pendiente'||e==='cobrar'||e==='pagada')&&st!==e)return false;
+    if(f.pacientes&&!f.pacientes.includes(r.paciente))return false;
+    if(f.buscar&&!r.paciente.toLowerCase().includes(f.buscar.toLowerCase()))return false;
+    const k=monthKey(r.esperado);
+    if(f.desde&&(!k||k<f.desde))return false;
+    if(f.hasta&&(!k||k>f.hasta))return false;
+    return true;
+  });
+}
+
+function render(){renderSummary();renderTable()}
+
+function renderSummary(){
+  const f=state.filtros;
+  const pend=records.filter(r=>isPend(r)
+    &&(!f.pacientes||f.pacientes.includes(r.paciente))
+    &&(!f.buscar||r.paciente.toLowerCase().includes(f.buscar.toLowerCase())));
+  const sum=a=>a.reduce((s,r)=>s+(isNaN(r.monto)?0:r.monto),0);
+  const venc=pend.filter(r=>estadoDe(r)==='cobrar');
+  const esteMes=pend.filter(r=>monthKey(r.esperado)===todayMonth);
+  const gananciaEsteMes=sum(esteMes.map(r=>({monto:isNaN(ganancia(r))?0:ganancia(r)})));
+  $('stats').innerHTML=[
+    ['Esperado este mes (cantidad)',esteMes.length],
+    ['Por cobrar (ya pasó el plazo)',`${venc.length} · ${fmtMoney(sum(venc))}`],
+    ['Ganancia esperada este mes',fmtMoney(gananciaEsteMes)],
+  ].map(([l,n])=>`<div class="stat"><div class="n">${n}</div><div class="l">${l}</div></div>`).join('');
+
+  const map={};
+  pend.forEach(r=>{const k=monthKey(r.esperado)||'(sin mes)';
+    const o=map[k]=map[k]||{n:0,m:0,mesLabel:r.mesLabel};o.n++;o.m+=isNaN(r.monto)?0:r.monto});
+  const keys=Object.keys(map).sort();
+  const max=Math.max(1,...keys.map(k=>map[k].m));
+  $('byMonth').innerHTML=keys.length?keys.map(k=>{
+    const venced=k!=='(sin mes)'&&k<=todayMonth;
+    const titulo=k==='(sin mes)'?k:`${monthLabel(k)} (facturado en ${map[k].mesLabel})`;
+    return `<div class="bar-row">
+      <span>${titulo}</span>
+      <span><span class="bar ${venced?'venc':''}" style="width:${map[k].m/max*100}%"></span></span>
+      <span style="text-align:right">${fmtMoney(map[k].m)}</span>
+      <span style="text-align:right;color:var(--muted)">${map[k].n}</span>
+    </div>`;
+  }).join(''):'<div class="hint">Sin pendientes con los filtros actuales.</div>';
+}
+
+const ganancia=r=>isNaN(r.monto)?NaN:r.monto-(isNaN(r.rendicion)?0:r.rendicion);
+const ESTADO_TAG={pagada:'<span class="tag pag">pagada</span>',
+  cobrar:'<span class="tag cobrar">por cobrar</span>',
+  pendiente:'<span class="tag pend">pendiente</span>'};
+const COLS=[
+  ['paciente','Paciente',r=>r.paciente.replace(/</g,'&lt;')],
+  ['obraSocial','Obra social',r=>r.obraSocial.replace(/</g,'&lt;')],
+  ['estado','Estado',r=>ESTADO_TAG[estadoDe(r)]],
+  ['mesBloque','Mes Facturado',r=>r.mesLabel,1],
+  ['esperado','Mes esperado',r=>r.esperado?monthLabel(monthKey(r.esperado)):'—',1],
+  ['monto','Monto',r=>fmtMoney(r.monto),0,1],
+  ['rendicion','Rendición',r=>fmtMoney(r.rendicion),0,1],
+  ['ganancia','Ganancia',r=>fmtMoney(ganancia(r)),0,1],
+  ['fechaDeposito','Depósito',r=>r.pagada?(r.fechaDeposito?fmtDate(r.fechaDeposito):r.depRaw):'—',1],
+];
+function sortVal(r,c){
+  if(c==='monto')return isNaN(r.monto)?-Infinity:r.monto;
+  if(c==='rendicion')return isNaN(r.rendicion)?-Infinity:r.rendicion;
+  if(c==='ganancia')return isNaN(ganancia(r))?-Infinity:ganancia(r);
+  if(c==='mesBloque')return r.mesBloque?r.mesBloque.getTime():-Infinity;
+  if(c==='esperado')return r.esperado?r.esperado.getTime():-Infinity;
+  if(c==='fechaDeposito')return r.fechaDeposito?r.fechaDeposito.getTime():(r.pagada?0:-Infinity);
+  if(c==='estado')return {pendiente:0,cobrar:1,pagada:2}[estadoDe(r)];
+  return String(r[c]||'').toLowerCase();
+}
+function renderTable(){
+  const data=filtered().sort((a,b)=>{const x=sortVal(a,sort.col),y=sortVal(b,sort.col);return (x<y?-1:x>y?1:0)*sort.dir});
+  const t=$('tbl');
+  t.innerHTML=`<thead><tr>${COLS.map(([c,l,,,num])=>
+    `<th data-c="${c}" class="${num?'num ':''}${sort.col===c?'sorted '+(sort.dir>0?'asc':''):''}">${l}</th>`).join('')}</tr></thead>
+    <tbody>${data.map(r=>
+      `<tr>${COLS.map(([c,l,fn,,num])=>`<td class="${num?'num':''}">${fn(r)}</td>`).join('')}</tr>`
+    ).join('')}</tbody>
+    <tfoot><tr>${COLS.map(([c],i)=>{
+      const acc=k=>data.reduce((s,r)=>{const v=k==='ganancia'?ganancia(r):r[k];return s+(isNaN(v)?0:v)},0);
+      if(i===0)return `<td>Total · ${data.length} filas</td>`;
+      if(c==='monto'||c==='rendicion'||c==='ganancia')return `<td class="num">${fmtMoney(acc(c))}</td>`;
+      return '<td></td>';
+    }).join('')}</tr></tfoot>`;
+  t.querySelectorAll('th').forEach(th=>th.onclick=()=>{
+    const c=th.dataset.c;
+    if(sort.col===c)sort.dir*=-1;else sort={col:c,dir:1};
+    renderTable();
+  });
+  $('tblCount').textContent='';
+}
+
+function exportCsv(){
+  const data=filtered();
+  const head=['Paciente','Obra social','Estado','Mes','Monto','Rendición','Ganancia','Mes esperado','Fecha depósito'];
+  const lines=[head.join(';')].concat(data.map(r=>[
+    r.paciente,r.obraSocial,estadoDe(r),r.mesLabel,
+    isNaN(r.monto)?'':r.monto,isNaN(r.rendicion)?'':r.rendicion,isNaN(ganancia(r))?'':ganancia(r),
+    r.esperado?monthKey(r.esperado):'',r.pagada?(r.fechaDeposito?fmtDate(r.fechaDeposito):r.depRaw):''
+  ].map(v=>`"${String(v).replace(/"/g,'""')}"`).join(';')));
+  const blob=new Blob(['﻿'+lines.join('\r\n')],{type:'text/csv'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download='informe-pagos.csv';a.click();URL.revokeObjectURL(a.href);
+}
+
+function setStatus(m,cls){$('status').textContent=m;$('status').className=cls||''}
+function showErr(e){console.error(e);setStatus(e.message||String(e),'err')}
+</script>
+</body>
+</html>
