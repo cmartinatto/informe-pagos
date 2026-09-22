@@ -60,15 +60,25 @@
   .checks{display:flex;flex-wrap:wrap;gap:6px 14px;max-height:120px;overflow:auto}
   .checks label{display:flex;align-items:center;gap:5px;font-weight:400;color:var(--text);font-size:13px}
   .toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end}
+  .legend{display:flex;flex-wrap:wrap;gap:14px;margin-bottom:14px;font-size:13px;color:var(--muted)}
+  .legend span{display:flex;align-items:center;gap:6px}
   .tabs{display:flex;gap:4px;border-bottom:1px solid var(--border);margin:16px 0 20px}
   .tabs button{background:transparent;color:var(--muted);border:0;border-bottom:2px solid transparent;border-radius:0;padding:9px 16px;font-weight:600}
   .tabs button.active{color:var(--accent);border-bottom-color:var(--accent)}
+  .envSwitch{display:inline-flex;border:1px solid var(--border);border-radius:8px;overflow:hidden}
+  .envSwitch button{background:var(--bg);color:var(--muted);border:0;border-radius:0;padding:8px 14px;font-weight:600}
+  .envSwitch button.active{background:var(--accent);color:#fff}
+  .envBanner{position:fixed;left:0;right:0;z-index:1000;background:#fde047;color:#713f12;
+    font-weight:700;text-align:center;padding:9px 12px;font-size:13px;letter-spacing:.02em}
+  .envBanner.top{top:0;border-bottom:2px solid #ca8a04}
+  .envBanner.bottom{bottom:0;border-top:2px solid #ca8a04}
+  body.testing-mode{padding-top:40px;padding-bottom:40px}
 </style>
 </head>
 <body>
+<div id="bannerTop" class="envBanner top hidden">MODO TESTING — Los datos que ves NO son reales</div>
 <div class="wrap">
   <h1>Informe de pagos — Obras sociales</h1>
-  <div class="hint">Todo corre en tu navegador. Los datos viajan solo entre tu equipo y Google; nada se guarda en ningún servidor.</div>
   <div id="status"></div>
 
   <nav class="tabs">
@@ -92,6 +102,11 @@
   <!-- CONTROLS + TABLE -->
   <section class="card hidden" id="tblCard">
     <h2>Detalle</h2>
+    <div class="legend">
+      <span><span class="tag pag">pagada</span> el depósito ya se hizo</span>
+      <span><span class="tag pend">pendiente</span> impaga, todavía dentro del plazo esperado</span>
+      <span><span class="tag cobrar">por cobrar</span> impaga y ya pasó el mes esperado de cobro</span>
+    </div>
     <div class="toolbar">
       <div class="field" style="max-width:170px">
         <label>Estado</label>
@@ -132,6 +147,15 @@
   <!-- CONFIG -->
   <section class="card" id="cfgCard">
     <h2>1 · Conexión</h2>
+    <div class="row" style="margin-bottom:4px">
+      <div class="field" style="max-width:280px">
+        <label>Entorno</label>
+        <div class="envSwitch">
+          <button type="button" data-env="prod">Producción</button>
+          <button type="button" data-env="test">Testing</button>
+        </div>
+      </div>
+    </div>
     <div class="row">
       <div class="field" style="flex:2">
         <label>Google OAuth Client ID</label>
@@ -146,12 +170,12 @@
         <input id="gid" placeholder="0">
       </div>
     </div>
+    <div class="hint">El Client ID se comparte entre entornos. La planilla y el GID se guardan por separado para cada uno.</div>
     <div class="row" style="margin-top:12px;align-items:center">
       <button id="btnConnect" disabled>Conectar con Google</button>
       <button id="btnReload" class="ghost hidden">Actualizar datos</button>
       <span class="hint">Origen actual: <code id="origin"></code></span>
     </div>
-    <div class="hint" style="margin-top:8px">La sesión (token de solo lectura, dura 1 h) queda guardada en este navegador para no reconectar en cada refresco. Se renueva sola mientras tu sesión de Google siga activa.</div>
   </section>
 
   <!-- MAPPING -->
@@ -172,6 +196,7 @@
   </section>
   </div>
 </div>
+<div id="bannerBottom" class="envBanner bottom hidden">MODO TESTING — Los datos que ves NO son reales</div>
 
 <script src="https://accounts.google.com/gsi/client" async></script>
 <script>
@@ -190,17 +215,36 @@ let state=load();
 let gridRaw=[], gridBg=[], uniqueCols=[], monthGroups=[], patientRows=[], records=[], sort={col:'esperado',dir:1};
 
 function load(){
-  const d={clientId:'',spreadsheetId:'1vYYDA61Ec0un6CSCgUQXGPe_tnHQeAcUttwwzKHjXyA',gid:'1943900187',
+  const d={clientId:'',
+    envs:{prod:{label:'Producción',spreadsheetId:'1vYYDA61Ec0un6CSCgUQXGPe_tnHQeAcUttwwzKHjXyA',gid:'1943900187'},
+          test:{label:'Testing',spreadsheetId:'17C5DvSvIdOMHeVIqQtBhDUY75awTH5SmC0UzRppD-Hs',gid:'0'}},
+    env:'prod',
     mapping:{paciente:'',obraSocial:''},mesesAtraso:0,
     filtros:{estado:'unpaid',buscar:'',desde:'',hasta:'',pacientes:null}};
-  try{return Object.assign(d,JSON.parse(localStorage.getItem(LS)||'{}'))}catch(e){return d}
+  let s={}; try{s=JSON.parse(localStorage.getItem(LS)||'{}')}catch(e){}
+  const out=Object.assign({},d,s);
+  if(!s.envs){ // migración: versión previa guardaba spreadsheetId/gid sueltos
+    out.envs=JSON.parse(JSON.stringify(d.envs));
+    if(s.spreadsheetId)out.envs.prod.spreadsheetId=s.spreadsheetId;
+    if(s.gid)out.envs.prod.gid=s.gid;
+  }
+  return out;
 }
 function save(){localStorage.setItem(LS,JSON.stringify(state))}
+const curEnv=()=>state.envs[state.env];
 
 $('origin').textContent=location.origin;
 $('clientId').value=state.clientId;
-$('sheetUrl').value=state.spreadsheetId;
-$('gid').value=state.gid;
+$('sheetUrl').value=curEnv().spreadsheetId;
+$('gid').value=curEnv().gid;
+document.querySelectorAll('.envSwitch button').forEach(b=>b.classList.toggle('active',b.dataset.env===state.env));
+function updateEnvBanner(){
+  const on=state.env==='test';
+  document.body.classList.toggle('testing-mode',on);
+  $('bannerTop').classList.toggle('hidden',!on);
+  $('bannerBottom').classList.toggle('hidden',!on);
+}
+updateEnvBanner();
 $('mesesAtraso').value=state.mesesAtraso;
 if(state.filtros.estado==='pend')state.filtros.estado='unpaid';
 if(state.filtros.estado==='pag')state.filtros.estado='pagada';
@@ -212,11 +256,24 @@ $('fHasta').value=state.filtros.hasta;
 $('clientId').oninput=e=>{state.clientId=e.target.value.trim();save()};
 $('sheetUrl').oninput=e=>{
   const v=e.target.value.trim();
-  const m=v.match(/\/d\/([a-zA-Z0-9_-]+)/); state.spreadsheetId=m?m[1]:v;
-  const g=v.match(/[#&]gid=(\d+)/); if(g){state.gid=g[1];$('gid').value=g[1]}
+  const m=v.match(/\/d\/([a-zA-Z0-9_-]+)/); curEnv().spreadsheetId=m?m[1]:v;
+  const g=v.match(/[#&]gid=(\d+)/); if(g){curEnv().gid=g[1];$('gid').value=g[1]}
   save();
 };
-$('gid').oninput=e=>{state.gid=e.target.value.trim();save()};
+$('gid').oninput=e=>{curEnv().gid=e.target.value.trim();save()};
+function setEnv(env){
+  state.env=env; save();
+  document.querySelectorAll('.envSwitch button').forEach(b=>b.classList.toggle('active',b.dataset.env===env));
+  updateEnvBanner();
+  $('sheetUrl').value=curEnv().spreadsheetId;
+  $('gid').value=curEnv().gid;
+  gridRaw=[];gridBg=[];records=[];
+  ['mapCard','sumCard','tblCard'].forEach(i=>$(i).classList.add('hidden'));
+  $('informeEmpty').classList.remove('hidden');
+  setStatus(`Entorno: ${curEnv().label||env}. Tocá «Actualizar datos».`);
+  if(token)doReload();
+}
+document.querySelectorAll('.envSwitch button').forEach(b=>b.onclick=()=>setEnv(b.dataset.env));
 $('mesesAtraso').onchange=e=>{state.mesesAtraso=+e.target.value||0;save();rebuild()};
 ['fEstado','fBuscar','fDesde','fHasta'].forEach(id=>{
   $(id).oninput=()=>{Object.assign(state.filtros,{estado:$('fEstado').value,buscar:$('fBuscar').value,
@@ -268,7 +325,7 @@ function getToken(mode){ // 'silent' | 'consent'
   });
 }
 function connect(){
-  if(!state.spreadsheetId)return showErr(new Error('Falta la planilla.'));
+  if(!curEnv().spreadsheetId)return showErr(new Error('Falta la planilla.'));
   setStatus('Abriendo login de Google…');
   getToken('consent').then(loadData).catch(showErr);
 }
@@ -276,7 +333,7 @@ function connect(){
 (function poll(){
   if(!window.google?.accounts?.oauth2)return setTimeout(poll,200);
   $('btnConnect').disabled=false;
-  if(state.clientId&&state.spreadsheetId){
+  if(state.clientId&&curEnv().spreadsheetId){
     getToken('silent').then(loadData).catch(()=>setStatus('Sesión de Google no activa — tocá «Conectar con Google».'));
   }
 })();
@@ -295,8 +352,8 @@ async function api(url,retry){
 async function loadData(){
   setStatus('Leyendo planilla (valores y colores)…');
   const flds='sheets(properties(title,sheetId),data(rowData(values(formattedValue,effectiveFormat(backgroundColor,backgroundColorStyle)))))';
-  const meta=await api(`https://sheets.googleapis.com/v4/spreadsheets/${state.spreadsheetId}?includeGridData=true&fields=${encodeURIComponent(flds)}`);
-  const sh=meta.sheets.find(s=>String(s.properties.sheetId)===String(state.gid))||meta.sheets[0];
+  const meta=await api(`https://sheets.googleapis.com/v4/spreadsheets/${curEnv().spreadsheetId}?includeGridData=true&fields=${encodeURIComponent(flds)}`);
+  const sh=meta.sheets.find(s=>String(s.properties.sheetId)===String(curEnv().gid))||meta.sheets[0];
   const title=sh.properties.title;
   const rd=(sh.data&&sh.data[0]&&sh.data[0].rowData)||[];
   gridRaw=rd.map(r=>(r.values||[]).map(c=>c.formattedValue??''));
@@ -307,7 +364,7 @@ async function loadData(){
   rebuild();
   const cc={paid:0,pending:0,other:0};
   gridBg.forEach((row,r)=>{if(r<2)return;row.forEach(v=>{if(cc[v]!=null)cc[v]++})});
-  setStatus(`Hoja «${title}» · ${patientRows.length} pacientes · ${monthGroups.length} meses · celdas verdes ${cc.paid} / celestes ${cc.pending}`,'ok');
+  setStatus(`[${curEnv().label||state.env}] Hoja «${title}» · ${patientRows.length} pacientes · ${monthGroups.length} meses · celdas verdes ${cc.paid} / celestes ${cc.pending}`,'ok');
   $('btnReload').classList.remove('hidden');
   ['mapCard','sumCard','tblCard'].forEach(i=>$(i).classList.remove('hidden'));
   $('informeEmpty').classList.add('hidden');
