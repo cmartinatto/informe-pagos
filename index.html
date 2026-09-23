@@ -219,7 +219,7 @@ function load(){
     envs:{prod:{label:'Producción',spreadsheetId:'1vYYDA61Ec0un6CSCgUQXGPe_tnHQeAcUttwwzKHjXyA',gid:'1943900187'},
           test:{label:'Testing',spreadsheetId:'17C5DvSvIdOMHeVIqQtBhDUY75awTH5SmC0UzRppD-Hs',gid:'0'}},
     env:'prod',
-    mapping:{paciente:'',obraSocial:''},mesesAtraso:3,
+    mapping:{paciente:'',obraSocial:''},mesesAtraso:2,
     filtros:{estado:'unpaid',buscar:'',desde:'',hasta:'',pacientes:null}};
   let s={}; try{s=JSON.parse(localStorage.getItem(LS)||'{}')}catch(e){}
   const out=Object.assign({},d,s);
